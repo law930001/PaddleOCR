@@ -12,6 +12,5 @@
 
 
 python predict_TBrain.py \
---rec_model_dir="./inference/chinese_cht_mobile_v2.0_rec_infer/" \
 --rec_char_type="chinese_cht" \
 --rec_char_dict_path="/root/Storage/PaddleOCR/ppocr/utils/dict/chinese_cht_dict.txt"

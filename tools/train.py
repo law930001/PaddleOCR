@@ -40,7 +40,6 @@ import tools.program as program
 
 dist.get_world_size()
 
-
 def main(config, device, logger, vdl_writer):
     # init dist environment
     if config['Global']['distributed']:

@@ -1,3 +1,4 @@
+from natsort.natsort import natsorted
 import os
 import sys
 
@@ -18,6 +19,7 @@ import tools.infer.utility as utility
 from ppocr.postprocess import build_post_process
 from ppocr.utils.logging import get_logger
 from ppocr.utils.utility import get_image_file_list, check_and_read_gif
+import natsort
 
 
 from tqdm import tqdm
@@ -258,28 +260,64 @@ class TextRecognizer(object):
 
 def main(args):
 
-    rec_model_dir = "/root/Storage/PaddleOCR/inference/ch_infer"
-
-    args.rec_model_dir = rec_model_dir
-
-
     TBrain_root = '/root/Storage/datasets/TBrain/public/img_public/'
     csv_root = '/root/Storage/datasets/TBrain/public/Task2_Public_String_Coordinate.csv'
 
-    text_recognizer = TextRecognizer(args)
+    # horizontal recognition model
+
+    rec_model_dir = "/root/Storage/PaddleOCR/inference/ch_infer_hor"
+
+    args.rec_model_dir = rec_model_dir
+
+    text_recognizer_hor = TextRecognizer(args)
+
+    # vertical recognition model
+
+    rec_model_dir = "/root/Storage/PaddleOCR/inference/ch_infer_ver"
+
+    args.rec_model_dir = rec_model_dir
+    args.max_text_length = 15
+
+    text_recognizer_ver = TextRecognizer(args)
+
 
     # warmup 10 times
     if args.warmup:
         img = np.random.uniform(0, 255, [32, 320, 3]).astype(np.uint8)
         for i in range(10):
-            text_recognizer([img])
+            text_recognizer_hor([img])
+            text_recognizer_ver([img])
+
+    # result file
 
     result_file = open('result.csv', 'w')
+
+    # temp file
+
+    temp_dir = natsorted(os.listdir('./temp_929/'))
+
+    img_have_word =[]
+
+    for file in temp_dir:
+        img_num = file.split('_')[0]
+        if img_num not in img_have_word:
+            img_have_word.append(img_num)
+
+    # ignore txt
+
+    ignore_char = []
+
+    ignore = open('./ignore_char.txt', 'r').readlines()
+    
+    for char in ignore:
+        if char not in ignore_char:
+            ignore_char.append(char.strip())
+
 
     with open(csv_root, 'r') as csv_file:
             
 
-            for i, line in enumerate(csv_file.readlines()):
+            for i, line in enumerate(tqdm(csv_file.readlines())):
 
                 line_split = line.strip().split(',')
 
@@ -287,28 +325,37 @@ def main(args):
 
                 img = cv2.imread(TBrain_root + img_name + '.jpg')
 
-                x_max = max(int(line_split[1]),int(line_split[3]),int(line_split[5]),int(line_split[7]))
-                y_max = max(int(line_split[2]),int(line_split[4]),int(line_split[6]),int(line_split[8]))
-                x_min = min(int(line_split[1]),int(line_split[3]),int(line_split[5]),int(line_split[7]))
-                y_min = min(int(line_split[2]),int(line_split[4]),int(line_split[6]),int(line_split[8]))
+                line_split = list(map(int, line_split[1:]))
 
-                # crop image
-                cropped = img[y_min:y_max, x_min:x_max]
-                # cropped = cv2.imread('/root/Storage/PaddleOCR/train_data/rec/train/img_78714.jpg')
+                points1 = np.float32(points2order([[line_split[0],line_split[1]],[line_split[2],line_split[3]],[line_split[4],line_split[5]],[line_split[6],line_split[7]]]))
+                
+                img_height, img_width = max(points1[:,1]) - min(points1[:,1]), max(points1[:,0]) - min(points1[:,0])
+                
+                points2 = np.float32([[0,0], [0,img_height], [img_width,0], [img_width,img_height]])
 
-                cv2.imwrite('cropped.jpg', cropped)
-                cv2.imwrite('img.jpg', img)
+                M = cv2.getPerspectiveTransform(points1, points2)
+                processed_img = cv2.warpPerspective(img, M, (img_width, img_height))
 
-                try:
-                    result, _ = text_recognizer([cropped])
+                cv2.imwrite('processed_img.jpg', processed_img)
+
+                if str(i+1) in img_have_word:
+
+                    # horizontal
+                    if img_width >= img_height:
+                        
+                        result, _ = text_recognizer_hor([processed_img])
+
+                    # vertical
+                    else:
+                        
+                        result, _ = text_recognizer_ver([processed_img])
+    
 
                     result = result[0][0]
 
                     ans = ""
                     for s in result:
-                        if s.isdigit():
-                            continue
-                        elif (u'\u0041'<= s <= u'\u005a') or (u'\u0061'<= s <= u'\u007a'):
+                        if s in ignore_char:
                             continue
                         else:
                             ans += s
@@ -316,17 +363,34 @@ def main(args):
                     if ans == "":
                         ans = "###"
 
-
-                    print(i, ans)
-
                     result_file.write(line.strip() + ',' + ans + '\n')
-                    result_file.flush()
+
+                else:
+                    result_file.write(line.strip() + ',' + '###' + '\n')
+                
+                result_file.flush()
+                    
 
 
-                except Exception as E:
-                    print('Fault')
+def points2order(points):
 
+    ans = []
+    center = [0,0]
 
+    points = sorted(points, key = lambda x : x[0] + x[1])
+
+    for x,y in points:
+        center[0] += x/4
+        center[1] += y/4
+    center[0] = round(center[0])
+    center[1] = round(center[1])
+
+    ans.append(points[0])
+    ans.append(points[1] if points[1][0] < center[0] else points[2])
+    ans.append(points[1] if points[1][0] > center[0] else points[2])
+    ans.append(points[3])
+
+    return ans
 
 
 if __name__ == "__main__":
