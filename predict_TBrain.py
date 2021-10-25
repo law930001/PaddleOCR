@@ -7,6 +7,8 @@ sys.path.append(__dir__)
 sys.path.append(os.path.abspath(os.path.join(__dir__, '../..')))
 
 os.environ["FLAGS_allocator_strategy"] = 'auto_growth'
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+
 
 import cv2
 import numpy as np
@@ -19,12 +21,32 @@ import tools.infer.utility as utility
 from ppocr.postprocess import build_post_process
 from ppocr.utils.logging import get_logger
 from ppocr.utils.utility import get_image_file_list, check_and_read_gif
+from tools.infer.predict_det import TextDetector
+
 import natsort
-
-
 from tqdm import tqdm
+from paddleocr import PaddleOCR, draw_ocr
+
+ocr_ch = PaddleOCR(use_angle_cls=False, lang="ch", det=False)
+ocr_cht = PaddleOCR(use_angle_cls=False, lang="chinese_cht", det=False)
+ocr_det = PaddleOCR(use_angle_cls=False, rec=False)
+
+from opencc import OpenCC
+
+
 
 logger = get_logger()
+
+
+# ignore txt
+
+ignore_char = []
+
+ignore = open('./ignore_char.txt', 'r').readlines()
+
+for char in ignore:
+    if char not in ignore_char:
+        ignore_char.append(char.strip())
 
 
 class TextRecognizer(object):
@@ -260,25 +282,77 @@ class TextRecognizer(object):
 
 def main(args):
 
-    TBrain_root = '/root/Storage/datasets/TBrain/public/img_public/'
-    csv_root = '/root/Storage/datasets/TBrain/public/Task2_Public_String_Coordinate.csv'
+    cc = OpenCC('s2tw')
+
+    # TBrain_root = '/root/Storage/datasets/TBrain/public/img_public/'
+    # csv_root = '/root/Storage/datasets/TBrain/public/Task2_Public_String_Coordinate.csv'
+    TBrain_root = '/root/Storage/datasets/TBrain/private/img_private/'
+    csv_root = '/root/Storage/datasets/TBrain/private/Task2_Private_String_Coordinate.csv'
+
+    # text detector
+
+    det_model_dir = "/root/Storage/PaddleOCR/inference/ch_ppocr_server_v2.0_det_infer"
+
+    args.det_model_dir = det_model_dir
+
+    text_detector = TextDetector(args)
+
+    if args.warmup:
+        img = np.random.uniform(0, 255, [640, 640, 3]).astype(np.uint8)
+        for i in range(10):
+            res = text_detector(img)
+
+    # server recognition model
+
+    rec_model_dir = "/root/Storage/PaddleOCR/inference/ch_ppocr_server_v2.0_rec_infer"
+
+    args.rec_model_dir = rec_model_dir
+    args.max_text_length = 25
+    args.rec_image_shape = "3, 32, 320"
+
+    text_recognizer_server = TextRecognizer(args)
+
+    # pre recognition model
+
+    rec_model_dir = "/root/Storage/PaddleOCR/inference/ch_infer_server_pre"
+
+    args.rec_model_dir = rec_model_dir
+    args.max_text_length = 25
+    args.rec_image_shape = "3, 32, 320"
+
+    text_recognizer_pre= TextRecognizer(args)
 
     # horizontal recognition model
 
-    rec_model_dir = "/root/Storage/PaddleOCR/inference/ch_infer_hor"
+    rec_model_dir = "/root/Storage/PaddleOCR/inference/ch_infer_all"
 
     args.rec_model_dir = rec_model_dir
+    args.max_text_length = 25
+    args.rec_image_shape = "3, 32, 320"
 
     text_recognizer_hor = TextRecognizer(args)
-
+  
     # vertical recognition model
 
-    rec_model_dir = "/root/Storage/PaddleOCR/inference/ch_infer_ver"
+    rec_model_dir = "/root/Storage/PaddleOCR/inference/ch_infer_all"
 
     args.rec_model_dir = rec_model_dir
-    args.max_text_length = 15
+    args.max_text_length = 25
+    args.rec_image_shape = "3, 32, 320"
 
     text_recognizer_ver = TextRecognizer(args)
+
+    # chinese cht recognition model
+
+    rec_model_dir = "/root/Storage/PaddleOCR/inference/chinese_cht_mobile_v2.0_rec_infer"
+
+    args.rec_model_dir = rec_model_dir
+    args.rec_char_dict_path = '/root/Storage/PaddleOCR/ppocr/utils/dict/chinese_cht_dict.txt'
+    args.rec_char_type = 'chinese_cht'
+    args.max_text_length = 25
+    args.rec_image_shape = "3, 32, 320"
+
+    text_recognizer_cht= TextRecognizer(args)
 
 
     # warmup 10 times
@@ -287,6 +361,9 @@ def main(args):
         for i in range(10):
             text_recognizer_hor([img])
             text_recognizer_ver([img])
+            text_recognizer_server([img])
+            text_recognizer_pre([img])
+            text_recognizer_cht([img])
 
     # result file
 
@@ -294,30 +371,22 @@ def main(args):
 
     # temp file
 
-    temp_dir = natsorted(os.listdir('./temp_929/'))
+    # temp_dir = natsorted(os.listdir('./temp_929/'))
 
-    img_have_word =[]
+    # img_have_word =[]
 
-    for file in temp_dir:
-        img_num = file.split('_')[0]
-        if img_num not in img_have_word:
-            img_have_word.append(img_num)
-
-    # ignore txt
-
-    ignore_char = []
-
-    ignore = open('./ignore_char.txt', 'r').readlines()
-    
-    for char in ignore:
-        if char not in ignore_char:
-            ignore_char.append(char.strip())
-
+    # for file in temp_dir:
+    #     img_num = file.split('_')[0]
+    #     if img_num not in img_have_word:
+    #         img_have_word.append(img_num)
 
     with open(csv_root, 'r') as csv_file:
             
 
             for i, line in enumerate(tqdm(csv_file.readlines())):
+
+                if i == 236:
+                    print('0')
 
                 line_split = line.strip().split(',')
 
@@ -337,39 +406,172 @@ def main(args):
                 processed_img = cv2.warpPerspective(img, M, (img_width, img_height))
 
                 cv2.imwrite('processed_img.jpg', processed_img)
+                cv2.imwrite('ori_img.jpg', img)
 
-                if str(i+1) in img_have_word:
+                result_det1 = ocr_det.ocr(processed_img)
+                result_det2, _ = text_detector(processed_img)
+                # print(result_det)
+
+                # if str(i+1) in img_have_word:
+                if result_det1 != [] or result_det2 != []:
 
                     # horizontal
                     if img_width >= img_height:
+                    # if True:
                         
-                        result, _ = text_recognizer_hor([processed_img])
+                        result1 = ocr_ch.ocr(processed_img)
+
+                        if result1 != []:
+                            result1 = [result1[0][1]]
+                        else:
+                            result1 = [['', 0]]
+
+                        result2 = ocr_cht.ocr(processed_img)
+
+                        if result2 != []:
+                            result2 = [result2[0][1]]
+                        else:
+                            result2 = [['', 0]]
+
+                        result3, _ = text_recognizer_server([processed_img])
+
+                        result4, _ = text_recognizer_hor([processed_img])
+
+                        result5, _ = text_recognizer_pre([processed_img])
+
+                        result6, _ = text_recognizer_cht([processed_img])
+
+                        result = list_post_process([result1, result2, result3, result4, result5, result6])
+                        # result = list_post_process([result3])
+
+
 
                     # vertical
                     else:
+                        processed_img = np.rot90(processed_img)
                         
-                        result, _ = text_recognizer_ver([processed_img])
-    
+                        result1 = ocr_ch.ocr(processed_img)
 
-                    result = result[0][0]
-
-                    ans = ""
-                    for s in result:
-                        if s in ignore_char:
-                            continue
+                        if result1 != []:
+                            result1 = [result1[0][1]]
                         else:
-                            ans += s
-                        
-                    if ans == "":
-                        ans = "###"
+                            result1 = [['', 0]]
 
-                    result_file.write(line.strip() + ',' + ans + '\n')
+                        result2 = ocr_cht.ocr(processed_img)
+
+                        if result2 != []:
+                            result2 = [result2[0][1]]
+                        else:
+                            result2 = [['', 0]]
+
+                        result3, _ = text_recognizer_server([processed_img])
+
+                        result5, _ = text_recognizer_pre([processed_img])
+
+                        result6, _ = text_recognizer_cht([processed_img])
+
+                        result4, _ = text_recognizer_ver([processed_img])
+
+                        result = list_post_process([result1, result2, result3, result4, result5, result6])
+                        result = result
+                        # result = list_post_process([result3])
+
+
+                    # result = cc.convert(result3[0][0])
+
+                    # ans = ""
+                    # for s in result:
+                    #     if s in ignore_char:
+                    #         continue
+                    #     else:
+                    #         ans += s
+                        
+                    # if result == "" or result3[0][1] < 0.4:
+                    #     result = "###"
+
+                    result_file.write(line.strip() + ',' + result + '\n')
 
                 else:
                     result_file.write(line.strip() + ',' + '###' + '\n')
                 
                 result_file.flush()
-                    
+
+def list_post_process(input_list):
+
+    cc = OpenCC('s2tw')
+
+    temp_list = []
+    final_result = ''
+
+    max_len = 0
+
+    sim = ['台','庄','里','斗','托']
+
+    len_dict = {}
+
+    for i in input_list:
+
+        word = ''
+        for s in i[0][0]:
+            if s in ignore_char:
+                continue
+            elif s in sim:
+                word += s
+            else:
+                word += cc.convert(s)
+        if i[0][1] < 0.0: # threshold
+            temp_list.append((word, '0'))
+        else:
+            temp_list.append((word, i[0][1]))
+
+        if len(word) > 0:
+            if len(word) not in len_dict:
+                len_dict[len(word)] = 1
+            else:
+                len_dict[len(word)] += 1
+
+        # if len(word) > max_len:
+        #     max_len = len(word)
+
+    if len(len_dict) != 0:
+        max_len = max(len_dict, key=len_dict.get)
+    else:
+        max_len = 0
+
+    temp_list = np.array(temp_list)
+
+    # print(temp_list)
+
+    for word_num in range(0, max_len):
+
+        char_list = []
+
+        for item in temp_list:
+            if len(item[0]) == max_len:
+                if word_num+1 <= len(item[0]):
+                    char_list.append([item[0][word_num], item[1]])
+
+        # print(char_list)
+        score_dict = {}
+
+        for char in char_list:
+            if char[0] not in score_dict:
+                score_dict[char[0]] = float(char[1])
+            else:
+                score_dict[char[0]] += float(char[1])
+
+        # print(score_dict)
+        # print(max(score_dict, key=score_dict.get))
+
+        if len(score_dict) != 0:
+            final_result += max(score_dict, key=score_dict.get)
+
+
+    if final_result == '':
+        final_result = '###'
+
+    return final_result
+
 
 
 def points2order(points):

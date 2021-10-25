@@ -3,10 +3,10 @@ Global:
   epoch_num: 3000
   log_smooth_window: 20
   print_batch_step: 10
-  save_model_dir: ./output/rec_chinese_hor
+  save_model_dir: ./output/rec_chinese_all
   save_epoch_step: 3
   # evaluation is run every 2000 iterations after the 0th iteration
-  eval_batch_step: [0, 2000]
+  eval_batch_step: [0, 200]
   cal_metric_during_train: True
   pretrained_model: /root/Storage/PaddleOCR/pretrained_model/ch_ppocr_server_v2.0_rec_pre/best_accuracy
   checkpoints:
@@ -62,7 +62,7 @@ Train:
   dataset:
     name: SimpleDataSet
     data_dir: ./train_data/rec/train
-    label_file_list: ["./train_data_hor/rec/rec_gt_train.txt"]
+    label_file_list: ["./train_data_all_and_test/rec/rec_gt_train.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
@@ -75,15 +75,15 @@ Train:
           keep_keys: ['image', 'label', 'length'] # dataloader will return list in this order
   loader:
     shuffle: True
-    batch_size_per_card: 75
-    drop_last: True
-    num_workers: 4
+    batch_size_per_card: 400
+    drop_last: False
+    num_workers: 8
 
 Eval:
   dataset:
     name: SimpleDataSet
     data_dir: ./train_data/rec/train
-    label_file_list: ["./train_data_hor/rec/rec_gt_val.txt"]
+    label_file_list: ["./train_data_all_and_test/rec/rec_gt_val.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
@@ -96,5 +96,5 @@ Eval:
   loader:
     shuffle: False
     drop_last: False
-    batch_size_per_card: 75
-    num_workers: 4
+    batch_size_per_card: 100
+    num_workers: 8

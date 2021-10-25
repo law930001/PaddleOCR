@@ -11,6 +11,6 @@
 # --rec_model_dir="./inference/ch_ppocr_server_v2.0_rec_infer/"
 
 
-python predict_TBrain.py \
---rec_char_type="chinese_cht" \
---rec_char_dict_path="/root/Storage/PaddleOCR/ppocr/utils/dict/chinese_cht_dict.txt"
+CUDA_VISIBLE_DEVICES=1 python predict_TBrain.py \
+--rec_char_type="ch" \
+--rec_char_dict_path="/root/Storage/PaddleOCR/ppocr/utils/ppocr_keys_v1.txt"

@@ -39,6 +39,7 @@ from ppocr.utils.save_load import init_model, load_dygraph_params
 import tools.program as program
 
 dist.get_world_size()
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 def main(config, device, logger, vdl_writer):
     # init dist environment

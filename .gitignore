@@ -12,6 +12,7 @@ inference_results/
 output/
 train_data_*/
 temp*/
+pretrained_model/
 
 *.DS_Store
 *.vs

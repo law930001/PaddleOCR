@@ -1,25 +1,25 @@
 Global:
   use_gpu: true
-  epoch_num: 500
+  epoch_num: 3000
   log_smooth_window: 20
   print_batch_step: 10
   save_model_dir: ./output/rec_chinese_ver
   save_epoch_step: 3
-  # evaluation is run every 5000 iterations after the 4000th iteration
-  eval_batch_step: [0, 2000]
+  # evaluation is run every 2000 iterations after the 0th iteration
+  eval_batch_step: [0, 100]
   cal_metric_during_train: True
-  pretrained_model:
-  checkpoints: 
+  pretrained_model: /root/Storage/PaddleOCR/pretrained_model/ch_ppocr_server_v2.0_rec_pre/best_accuracy
+  checkpoints:
   save_inference_dir:
   use_visualdl: False
-  infer_img: doc/imgs_words/chinese_traditional/chinese_cht_2.png
+  infer_img: doc/imgs_words/ch/word_1.jpg
   # for data or label process
-  character_dict_path: /root/Storage/PaddleOCR/ppocr/utils/dict/chinese_cht_dict.txt
-  character_type: chinese_cht
-  max_text_length: 15
+  character_dict_path: ppocr/utils/ppocr_keys_v1.txt
+  character_type: ch
+  max_text_length: 25
   infer_mode: False
   use_space_char: True
-  save_res_path: ./output/rec/predicts_chinese.txt
+  save_res_path: ./output/rec/predicts_chinese_common_v2.0.txt
 
 
 Optimizer:
@@ -31,7 +31,7 @@ Optimizer:
     learning_rate: 0.001
   regularizer:
     name: 'L2'
-    factor: 0.00001
+    factor: 0.00004
 
 Architecture:
   model_type: rec
@@ -83,7 +83,7 @@ Eval:
   dataset:
     name: SimpleDataSet
     data_dir: ./train_data/rec/train
-    label_file_list: ["./train_data_ver/rec/rec_gt_train.txt"]
+    label_file_list: ["./train_data_ver/rec/rec_gt_val.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
