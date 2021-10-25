@@ -9,8 +9,11 @@ __pycache__/
 
 inference/
 inference_results/
-output/
-train_data_*/
+output/*
+train_data_hor/
+train_data_ver/
+train_data_all_and_test/
+train_data_all/rec/train/
 temp*/
 pretrained_model/
 
