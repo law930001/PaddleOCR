@@ -1,14 +1,14 @@
-1. 資料處理
+資料處理
 請執行train_data_all/gt.py產生訓練資料
 gt.py中有兩個function
 第一個是json2txt，請根據裡面的路徑設定為自己的路徑並將json轉為txt檔案
 第二個是crop_img，請根據裡面的路徑設定為自己的路徑並將img crop出來並產生訓練txt檔案
 
-2. 訓練流程
+訓練流程
 可以修改configs/rec/rec_TBrain_train_all.yml參數
 訓練請執行train.sh，其中可以更改cuda所使用的顯示卡是第幾張
 
-3. 預測方法
+預測方法
 請在訓練完之後，執行export.sh，會將訓練model轉換為infer model
 最後執行predict.sh預測結果會生出result.txt檔案
 
